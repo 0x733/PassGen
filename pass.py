@@ -13,6 +13,9 @@ last_password_change_dates = {}
 # Oturum süresi (saniye cinsinden)
 SESSION_TIMEOUT = 300  # Örneğin, 5 dakika
 
+# Parola geçerlilik süresi (gün cinsinden)
+PASSWORD_EXPIRY_DAYS = 90  # Örneğin, 90 gün
+
 # Kullanıcı oturum başlangıç zamanını saklamak için bir sözlük oluşturalım
 session_start_times = {}
 
@@ -77,6 +80,15 @@ def check_session():
             break
     root.after(1000, check_session)
 
+def check_password_expiry():
+    current_time = datetime.now()
+    for username, last_change_date in last_password_change_dates.items():
+        elapsed_time = current_time - last_change_date
+        if elapsed_time.days >= PASSWORD_EXPIRY_DAYS:
+            messagebox.showwarning("Parola Süresi Doldu", f"{username} kullanıcısının parolası geçerlilik süresini doldurdu. Lütfen parolanızı güncelleyin.")
+            break
+    root.after(1000 * 60 * 60 * 24, check_password_expiry)  # Günlük kontrol için
+
 def login_button_clicked():
     username = username_entry.get()
     password = password_entry.get()
@@ -128,7 +140,13 @@ phone_number_entry.grid(row=3, column=1, padx=5, pady=5)
 
 # Giriş yap düğmesi
 login_button = tk.Button(root, text="Giriş Yap", command=login_button_clicked)
-login_button.grid(row=4, column=0, columnspan=2, padx=5, pady=5)
+login_button.grid(row=4, column=0, column span=2, padx=5, pady=5)
 
 # Doğrulama kodu iste düğmesi
-request_verification_code_button = tk.Button
+request_verification_code_button = tk.Button(root, text="Doğrulama Kodu İste", command=request_verification_code_button_clicked)
+request_verification_code_button.grid(row=5, column=0, columnspan=2, padx=5, pady=5)
+
+check_session()
+check_password_expiry()
+
+root.mainloop()
