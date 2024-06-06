@@ -10,14 +10,17 @@ from datetime import datetime, timedelta
 passwords = {}
 last_password_change_dates = {}
 
-# Oturum süresi için varsayılan değeri tanımlayalım (saniye cinsinden)
-DEFAULT_SESSION_TIMEOUT = 300  # 5 dakika
+# Oturum süresi ve oturum süresi sonlandırma
+SESSION_TIMEOUT = 300  # 5 dakika
+session_timer = None
 
-# Kullanıcıların oturum sürelerini saklamak için bir sözlük oluşturalım
-session_timeouts = {}
+# Günlük dosyası oluştur
+import logging
+logging.basicConfig(filename='password_manager.log', level=logging.INFO, format='%(asctime)s - %(message)s')
 
-max_login_attempts = 3
-login_attempts = {}
+def log_event(event):
+    # Belirli bir olayı günlüğe kaydet
+    logging.info(event)
 
 def generate_password(length):
     # Parolayı oluştururken büyük harf, küçük harf, rakam ve özel karakter kullanalım
@@ -36,13 +39,16 @@ def save_password(username, password):
     passwords[username] = hashed_password
     last_password_change_dates[username] = datetime.now()
     messagebox.showinfo("Başarılı", "Parola başarıyla kaydedildi.")
+    log_event(f"Password saved for user: {username}")
 
 def update_password(username, old_password, new_password):
     if verify_password(username, old_password):
         save_password(username, new_password)
         messagebox.showinfo("Başarılı", "Parola başarıyla güncellendi.")
+        log_event(f"Password updated for user: {username}")
     else:
         messagebox.showerror("Hata", "Eski parola doğrulanamadı. Parola güncellenemedi.")
+        log_event(f"Failed to update password for user: {username} - Incorrect old password")
 
 def verify_password(username, password):
     hashed_password = passwords.get(username)
@@ -78,55 +84,41 @@ def update_password_button_clicked():
     update_password(username, old_password, new_password)
 
 def login(username, password):
-    if username in passwords:
-        if verify_password(username, password):
-            # Kullanıcı girişi başarılı olduğunda oturum süresini güncelleyelim
-            login_attempts.pop(username, None)
-            update_session_timeout(username)
-            messagebox.showinfo("Başarılı", "Giriş başarıyla yapıldı.")
-        else:
-            # Kullanıcı adı doğru ancak parola yanlışsa giriş denemesini kaydedelim
-            if username in login_attempts:
-                login_attempts[username] += 1
-            else:
-                login_attempts[username] = 1
-
-            if login_attempts[username] >= max_login_attempts:
-                # Belirli bir sayıda başarısız giriş denemesi olduğunda hesabı kilitliyoruz
-                messagebox.showerror("Hesap Kilitli", "Çok fazla başarısız giriş denemesi. Hesap kilitlendi.")
-                # Hesabı kilitlediğimizde oturum süresini sıfırlayalım
-                reset_session_timeout(username)
-            else:
-                messagebox.showerror("Hatalı Giriş", "Parola yanlış. Lütfen tekrar deneyin.")
+    if verify_password(username, password):
+        return True
     else:
-        messagebox.showerror("Hatalı Giriş", "Kullanıcı bulunamadı.")
+        return False
 
 def login_button_clicked():
     username = username_entry.get()
     password = password_entry.get()
-    login(username, password)
+    if login(username, password):
+        messagebox.showinfo("Başarılı", "Giriş başarılı.")
+        log_event(f"Successful login for user: {username}")
+        # Oturum başlatıldığında oturum süresi kontrolünü başlat
+        start_session_timer()
+    else:
+        messagebox.showerror("Hata", "Kullanıcı adı veya parola hatalı.")
+        log_event(f"Failed login attempt for user: {username}")
 
-def reset_session_timeout(username):
-    session_timeouts[username] = None
+def logout_due_to_inactivity():
+    # Belirli bir süre boyunca işlem yapılmazsa oturumu sonlandır
+    messagebox.showinfo("Bilgi", "Oturum süreniz dolduğu için oturumunuz sonlandırıldı.")
+    log_event("User logged out due to inactivity")
+    end_session()
 
-def update_session_timeout(username):
-    session_timeouts[username] = datetime.now() + timedelta(seconds=DEFAULT_SESSION_TIMEOUT)
+def end_session():
+    # Oturumu sonlandır
+    # Kullanıcı adı ve parola alanlarını temizle
+    username_entry.delete(0, tk.END)
+    password_entry.delete(0, tk.END)
+    # Oturum süresi kontrolünü durdur
+    root.after_cancel(session_timer)
 
-def check_session():
-    current_time = datetime.now()
-    for username, session_timeout in session_timeouts.items():
-        if session_timeout and current_time > session_timeout:
-            # Oturum süresi dolmuş kullanıcıları uyar
-            messagebox.showwarning("Oturum Süresi Dolmuş", f"{username} kullanıcısının oturum süresi doldu.")
-            reset_session_timeout(username)
-
-def check_password_expiry():
-    current_time = datetime.now()
-    for username, last_change_date in last_password_change_dates.items():
-        expiry_date = last_change_date + timedelta(days=90)  # Parola değişim süresi 90 gün
-        if current_time > expiry_date:
-            # Parolası geçerliliğini yitiren kullanıcıları uyar
-            messagebox.showwarning("Parola Süresi Dolmuş", f"{username} kullanıcısının parolasının süresi doldu. Parolanızı güncelleyin.")
+def start_session_timer():
+    # Oturum süresi kontrolünü başlat
+    global session_timer
+    session_timer = root.after(SESSION_TIMEOUT * 1000, logout_due_to_inactivity)
 
 root = tk.Tk()
 root.title("Parola Yöneticisi")
@@ -145,16 +137,6 @@ password_entry.grid(row=1, column=1, padx=5, pady=5)
 
 # Giriş düğmesi
 login_button = tk.Button(root, text="Giriş Yap", command=login_button_clicked)
-login_button.grid(row=2, column=0, columnspan=2, padx=5, pady=    5)
-
-# Kullanıcı girişi düğmesi
-login_button = tk.Button(root, text="Giriş Yap", command=login_button_clicked)
 login_button.grid(row=2, column=0, columnspan=2, padx=5, pady=5)
-
-# Oturum süresi kontrolü
-root.after(1000, check_session)
-
-# Parola geçerliliği kontrolü
-root.after(1000, check_password_expiry)
 
 root.mainloop()
