@@ -138,9 +138,4 @@ save_password_button = tk.Button(root, text="Parolayı Kaydet", command=save_pas
 save_password_button.grid(row=6, column=0, columnspan=2, padx=5, pady=5)
 
 # Parola güncelleme düğmesi
-update_password_button = tk.Button(root, text="Parolayı Güncelle", command=update_password_button_clicked)
-update_password_button.grid(row=7, column=0, columnspan=2, padx=5, pady=5)
-
-# Oturum süresi kontrolü
-check_session()
-root.mainloop()
+update_password_button = tk.Button(root, text="Parolayı Güncelle", command
